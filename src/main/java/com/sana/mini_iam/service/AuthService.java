@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
 import java.time.LocalDateTime;
+import com.sana.mini_iam.security.JwtService;
 
 
 @Service
@@ -26,16 +27,19 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
     public AuthService(
-            UserRepository userRepository,
+        UserRepository userRepository,
         PasswordEncoder passwordEncoder,
-        AuthenticationManager authenticationManager) {
+        AuthenticationManager authenticationManager,
+        JwtService jwtService) {
 
     this.userRepository = userRepository;
     this.passwordEncoder = passwordEncoder;
     this.authenticationManager = authenticationManager;
-    }
+    this.jwtService = jwtService;
+}
 
     @Transactional
     public void register(RegisterRequest request) {
@@ -68,14 +72,20 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    public void login(LoginRequest request) {
+    
+public String login(LoginRequest request) {
 
+    // 1. Benutzername und Passwort überprüfen
     authenticationManager.authenticate(
         new UsernamePasswordAuthenticationToken(
             request.username(),
             request.password()
         )
     );
+
+    // 2. Nach erfolgreicher Anmeldung JWT erstellen
+    return jwtService.generateToken(request.username());
 }
+
     
 }

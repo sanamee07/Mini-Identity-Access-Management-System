@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.sana.mini_iam.dto.LoginRequest;
+import com.sana.mini_iam.dto.LoginResponse;
 
 @RestController
 @RequestMapping("/auth")
@@ -31,12 +32,12 @@ public class AuthController {
                 .body("User registered successfully");
     }
 @PostMapping("/login")
-public ResponseEntity<String> login(
+public ResponseEntity<LoginResponse> login(
         @Valid @RequestBody LoginRequest request) {
 
-    authService.login(request);
+    String token = authService.login(request);
 
-    return ResponseEntity.ok("Login successful");
+    return ResponseEntity.ok(new LoginResponse(token));
 }
 
 }
