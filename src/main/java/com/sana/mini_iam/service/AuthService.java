@@ -1,45 +1,48 @@
 package com.sana.mini_iam.service;
 
-
 import com.sana.mini_iam.dto.RegisterRequest;
+import com.sana.mini_iam.dto.LoginRequest;
 import com.sana.mini_iam.entity.Role;
 import com.sana.mini_iam.entity.User;
 import com.sana.mini_iam.repository.UserRepository;
+import com.sana.mini_iam.security.JwtService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.sana.mini_iam.dto.LoginRequest;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-
 import java.time.LocalDateTime;
-import com.sana.mini_iam.security.JwtService;
-
 
 @Service
-
-
 public class AuthService {
-
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
 
-    public AuthService(
-        UserRepository userRepository,
-        PasswordEncoder passwordEncoder,
-        AuthenticationManager authenticationManager,
-        JwtService jwtService) {
+    //Audit-Logging
+    private final AuditLogService auditLogService;
 
-    this.userRepository = userRepository;
-    this.passwordEncoder = passwordEncoder;
-    this.authenticationManager = authenticationManager;
-    this.jwtService = jwtService;
-}
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager,
+            JwtService jwtService,
+            AuditLogService auditLogService) {
+
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.authenticationManager = authenticationManager;
+        this.jwtService = jwtService;
+
+        // NEU
+        this.auditLogService = auditLogService;
+    }
 
     @Transactional
     public void register(RegisterRequest request) {
@@ -56,8 +59,6 @@ public class AuthService {
             );
         }
 
-        
-
         User user = new User();
 
         user.setUsername(request.username());
@@ -72,20 +73,44 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    
-public String login(LoginRequest request) {
+    public String login(LoginRequest request) {
 
-    // 1. Benutzername und Passwort überprüfen
-    authenticationManager.authenticate(
-        new UsernamePasswordAuthenticationToken(
+        try {
+
+            // 1. Benutzername und Passwort überprüfen
+            authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    request.username(),
+                    request.password()
+                )
+            );
+
+        } catch (AuthenticationException exception) {
+
+            // 2. Fehlgeschlagene Anmeldung protokollieren
+            auditLogService.logAction(
+                request.username(),
+                "LOGIN_FAILED",
+                request.username(),
+                "Invalid credentials or disabled account"
+            );
+
+            // Ursprüngliche Ausnahme weitergeben
+            throw exception;
+        }
+
+        // 3. JWT erstellen
+        String token = jwtService.generateToken(request.username());
+
+        // 4. Erfolgreiche Anmeldung protokollieren
+        auditLogService.logAction(
             request.username(),
-            request.password()
-        )
-    );
+            "LOGIN_SUCCESS",
+            request.username(),
+            "Successful login"
+        );
 
-    // 2. Nach erfolgreicher Anmeldung JWT erstellen
-    return jwtService.generateToken(request.username());
-}
-
-    
+        // 5. JWT zurückgeben
+        return token;
+    }
 }

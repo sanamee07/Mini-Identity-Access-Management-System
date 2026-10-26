@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import com.sana.mini_iam.dto.LoginRequest;
 import com.sana.mini_iam.dto.LoginResponse;
 
+
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
