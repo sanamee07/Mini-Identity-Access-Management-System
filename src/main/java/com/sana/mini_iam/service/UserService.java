@@ -12,18 +12,25 @@ import org.springframework.web.server.ResponseStatusException;
 import com.sana.mini_iam.entity.Role;
 import java.util.Objects;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
+
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final PasswordEncoder passwordEncoder;
 
     public UserService(
         UserRepository userRepository,
-        AuditLogService auditLogService) {
+        AuditLogService auditLogService,
+    PasswordEncoder passwordEncoder) {
 
     this.userRepository = userRepository;
     this.auditLogService = auditLogService;
+    this.passwordEncoder = passwordEncoder;
 }
 
     @Transactional
@@ -119,6 +126,60 @@ public void updateUserRole(
     oldRole.name() + " -> " + newRole.name()
 );
 }
+
+@Transactional
+public void changePassword(
+        String username,
+        String currentPassword,
+        String newPassword) {
+
+    // 1. Angemeldeten Benutzer aus der Datenbank laden
+    User user = userRepository.findByUsername(username)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "User not found"
+            ));
+
+    // 2. Bisheriges Passwort überprüfen
+    if (!passwordEncoder.matches(
+            currentPassword,
+            user.getPassword())) {
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Current password is incorrect"
+        );
+    }
+
+    // 3. Prüfen, ob das neue Passwort dem alten entspricht
+    if (passwordEncoder.matches(
+            newPassword,
+            user.getPassword())) {
+
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "New password must be different from current password"
+        );
+    }
+
+    // 4. Neues Passwort mit BCrypt hashen
+    String hashedPassword = passwordEncoder.encode(newPassword);
+
+    // 5. Passwort aktualisieren
+    user.setPassword(hashedPassword);
+
+    userRepository.save(user);
+
+    // 6. Passwortänderung protokollieren
+    auditLogService.logAction(
+            username,
+            "PASSWORD_CHANGED",
+            username,
+            "User changed their password"
+    );
+}
+
+
 
 
 
