@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 @Service
 public class AuthService {
 
@@ -24,6 +27,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final BruteForceProtectionService bruteForceProtectionService;
 
     //Audit-Logging
     private final AuditLogService auditLogService;
@@ -33,12 +37,14 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             AuthenticationManager authenticationManager,
             JwtService jwtService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+        BruteForceProtectionService bruteForceProtectionService) {
 
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.bruteForceProtectionService = bruteForceProtectionService;
 
         // NEU
         this.auditLogService = auditLogService;
@@ -73,44 +79,62 @@ public class AuthService {
         userRepository.save(user);
     }
 
+
+
     public String login(LoginRequest request) {
 
-        try {
+    // 1. Prüfen, ob zu viele fehlgeschlagene Versuche vorliegen
+    if (bruteForceProtectionService.isBlocked(request.username())) {
 
-            // 1. Benutzername und Passwort überprüfen
-            authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    request.username(),
-                    request.password()
-                )
-            );
+    // Blockierten Anmeldeversuch protokollieren
+    auditLogService.logAction(
+        request.username(),
+        "LOGIN_BLOCKED",
+        request.username(),
+        "Login blocked due to too many failed attempts"
+    );
 
-        } catch (AuthenticationException exception) {
+    throw new ResponseStatusException(
+        HttpStatus.TOO_MANY_REQUESTS,
+        "Too many login attempts. Please try again later."
+    );
+}
 
-            // 2. Fehlgeschlagene Anmeldung protokollieren
-            auditLogService.logAction(
+    try {
+
+        // 2. Benutzername und Passwort überprüfen
+        authenticationManager.authenticate(
+            new UsernamePasswordAuthenticationToken(
                 request.username(),
-                "LOGIN_FAILED",
-                request.username(),
-                "Invalid credentials or disabled account"
-            );
-
-            // Ursprüngliche Ausnahme weitergeben
-            throw exception;
-        }
-
-        // 3. JWT erstellen
-        String token = jwtService.generateToken(request.username());
-
-        // 4. Erfolgreiche Anmeldung protokollieren
-        auditLogService.logAction(
-            request.username(),
-            "LOGIN_SUCCESS",
-            request.username(),
-            "Successful login"
+                request.password()
+            )
         );
 
-        // 5. JWT zurückgeben
-        return token;
+    } catch (AuthenticationException exception) {
+
+        // 3. Fehlgeschlagene Anmeldung protokollieren
+        auditLogService.logAction(
+            request.username(),
+            "LOGIN_FAILED",
+            request.username(),
+            "Invalid credentials or disabled account"
+        );
+
+        throw exception;
     }
+
+    // 4. JWT erstellen
+    String token = jwtService.generateToken(request.username());
+
+    // 5. Erfolgreiche Anmeldung protokollieren
+    auditLogService.logAction(
+        request.username(),
+        "LOGIN_SUCCESS",
+        request.username(),
+        "Successful login"
+    );
+
+    // 6. JWT zurückgeben
+    return token;
+}
 }

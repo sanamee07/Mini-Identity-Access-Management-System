@@ -19,6 +19,8 @@ import javax.crypto.SecretKey;
 
 import com.sana.mini_iam.security.JwtAuthenticationConverter;
 
+import jakarta.servlet.DispatcherType;
+
 @Configuration
 public class SecurityConfig {
 
@@ -50,17 +52,26 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
+
+
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    HttpMethod.POST,
-                    "/auth/register",
-                    "/auth/login"
-                ).permitAll()
 
-                .requestMatchers("/admin/**").hasRole("ADMIN")
+    // Interne Fehlerweiterleitungen erlauben
+    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 
-                .anyRequest().authenticated()
-            )
+    // Registrierung und Login erlauben
+    .requestMatchers(
+        HttpMethod.POST,
+        "/auth/register",
+        "/auth/login"
+    ).permitAll()
+
+    // Administrator-Endpunkte schützen
+    .requestMatchers("/admin/**").hasRole("ADMIN")
+
+    // Alle anderen Endpunkte schützen
+    .anyRequest().authenticated()
+)
 
 
             .oauth2ResourceServer(oauth2 -> oauth2
