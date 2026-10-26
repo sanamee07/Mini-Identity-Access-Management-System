@@ -17,6 +17,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
 
+import com.sana.mini_iam.security.JwtAuthenticationConverter;
+
 @Configuration
 public class SecurityConfig {
 
@@ -38,8 +40,10 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http) throws Exception {
+   public SecurityFilterChain securityFilterChain(
+        HttpSecurity http,
+        JwtAuthenticationConverter jwtAuthenticationConverter
+) throws Exception {
 
         http
             .csrf(csrf -> csrf.disable())
@@ -52,11 +56,21 @@ public class SecurityConfig {
                     "/auth/register",
                     "/auth/login"
                 ).permitAll()
+
+                .requestMatchers("/admin/**").hasRole("ADMIN")
+
                 .anyRequest().authenticated()
             )
+
+
             .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(jwt -> {})
-            )
+    .jwt(jwt -> jwt
+        .jwtAuthenticationConverter(jwtAuthenticationConverter)
+    )
+)
+
+
+            
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
             .exceptionHandling(ex -> ex
